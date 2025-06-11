@@ -21,6 +21,7 @@ const io = new Server(server, {
     cors: {
         origin: process.env.CLIENT_URL,
         methods: ['GET', 'POST'],
+        credentials: true
     },
 });
 
@@ -28,7 +29,10 @@ const io = new Server(server, {
 connectDB();
 
 // Middleware
-app.use(cors({ origin: process.env.CLIENT_URL }));
+app.use(cors({
+  origin: process.env.CLIENT_URL,
+  credentials: true
+}));
 app.use(express.json()); // For parsing application/json
 
 // Routes
