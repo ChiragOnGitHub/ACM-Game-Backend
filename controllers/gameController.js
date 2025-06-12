@@ -91,47 +91,28 @@ exports.getFolderDetails = async (req, res, next) => {
 // @desc    Submit answer for a riddle
 // @route   POST /api/game/answer/:folderId
 // @access  Private
-exports.submitAnswer = async (req, res, next) => {
+exports.submitAnswer = async (req, res) => {
     const { answer } = req.body;
     const { folderId } = req.params;
-    const userId = req.user.id; // Assuming req.user is populated by auth middleware
-
-    // console.log(`[SubmitAnswer START] Received answer: "${answer}" for folder: ${folderId} by user: ${userId}`);
+    const userId = req.user.id;
 
     try {
         const folder = await Folder.findById(folderId).populate('riddle');
-        if (!folder) {
-            console.warn(`[SubmitAnswer] Folder not found: ${folderId}`);
-            return res.status(404).json({ message: 'Folder not found.' });
-        }
-        if (!folder.riddle) {
-            console.error(`[SubmitAnswer] Folder ${folderId} has no initial riddle defined.`);
-            return res.status(500).json({ message: 'Internal Server Error: Folder riddle not configured.' });
-        }
+        if (!folder) return res.status(404).json({ message: 'Folder not found.' });
+        if (!folder.riddle) return res.status(500).json({ message: 'Folder has no riddle configured.' });
 
         let gameState = await GameState.findOne({ user: userId });
-        if (!gameState) {
-            console.warn(`[SubmitAnswer] Game state not found for user: ${userId}`);
-            return res.status(404).json({ message: 'Game state not found for user.' });
-        }
+        if (!gameState) return res.status(404).json({ message: 'Game state not found.' });
 
-        // Determine which riddle the user is currently attempting for this folder
+        // Determine the current riddle
         let currentRiddle = folder.riddle;
         const unlockedFolderEntry = gameState.unlockedFolders.find(uf => uf.folderId.equals(folder._id));
 
         if (unlockedFolderEntry && unlockedFolderEntry.currentRiddleAttempt) {
             const nestedRiddle = await Riddle.findById(unlockedFolderEntry.currentRiddleAttempt);
-            if (!nestedRiddle) {
-                console.error(`[SubmitAnswer] Current nested riddle not found: ${unlockedFolderEntry.currentRiddleAttempt} for folder ${folderId}`);
-                return res.status(404).json({ message: 'Current riddle not found. Please contact support.' });
-            }
+            if (!nestedRiddle) return res.status(404).json({ message: 'Current riddle not found.' });
             currentRiddle = nestedRiddle;
         }
-
-        // console.log(`[SubmitAnswer] Current Riddle ID: ${currentRiddle._id}`);
-        // console.log(`[SubmitAnswer] Riddle expected answer: "${currentRiddle.answer}"`);
-        // console.log(`[SubmitAnswer] Riddle case-sensitive setting: ${currentRiddle.answerCaseSensitive}`);
-        // console.log(`[SubmitAnswer] User submitted answer: "${answer}"`);
 
         const cleanedSubmittedAnswer = answer.trim();
         const cleanedExpectedAnswer = currentRiddle.answer.trim();
@@ -140,104 +121,75 @@ exports.submitAnswer = async (req, res, next) => {
             ? cleanedSubmittedAnswer === cleanedExpectedAnswer
             : cleanedSubmittedAnswer.toLowerCase() === cleanedExpectedAnswer.toLowerCase();
 
-        // console.log(`[SubmitAnswer] Comparison result (isCorrect): ${isCorrect}`);
-
         if (isCorrect) {
-            // console.log(`[SubmitAnswer - Correct] Answer is correct for folder: ${folderId}`);
+            const folderIndex = gameState.unlockedFolders.findIndex(uf => uf.folderId.equals(folder._id));
 
             if (currentRiddle.nextRiddle) {
-                // console.log(`[SubmitAnswer - Correct] Moving to next riddle: ${currentRiddle.nextRiddle}`);
-                const folderIndex = gameState.unlockedFolders.findIndex(uf => uf.folderId.equals(folder._id));
+                // ✅ Move to next nested riddle
                 if (folderIndex !== -1) {
                     gameState.unlockedFolders[folderIndex].currentRiddleAttempt = currentRiddle.nextRiddle;
-                    // console.log(`[SubmitAnswer - Correct] Updated currentRiddleAttempt for existing entry.`);
                 } else {
-                    // This block should ideally not be hit for nested riddles
-                    console.warn(`[SubmitAnswer - Correct] Creating new unlockedFolder entry for nested riddle. This might indicate a logic anomaly in how folders are initially added to gameState.`);
                     gameState.unlockedFolders.push({
                         folderId: folder._id,
                         unlockedAt: new Date(),
-                        currentRiddleAttempt: currentRiddle.nextRiddle
+                        currentRiddleAttempt: currentRiddle.nextRiddle,
                     });
                 }
-                // console.log(`[SubmitAnswer - Correct] Saving game state for nested riddle...`);
+
                 await gameState.save();
-                // console.log(`[SubmitAnswer - Correct] Game state saved.`);
 
                 const nextRiddle = await Riddle.findById(currentRiddle.nextRiddle).select('-answer');
-                if (!nextRiddle) {
-                    // This is a crucial check if nextRiddle ID exists but the riddle itself doesn't.
-                    console.error(`[SubmitAnswer - Correct] Next riddle not found for ID: ${currentRiddle.nextRiddle}`);
-                    return res.status(500).json({ message: 'Internal Server Error: Next riddle not found.' });
-                }
-                // console.log(`[SubmitAnswer - Correct] Sending response for next riddle.`);
+                if (!nextRiddle) return res.status(500).json({ message: 'Next riddle not found.' });
+
                 return res.status(200).json({
                     message: 'Correct answer! Here is the next part of the riddle.',
                     unlocked: false,
-                    nextRiddle: nextRiddle,
+                    nextRiddle,
                 });
             } else {
-                // console.log(`[SubmitAnswer - Correct] Final riddle solved for folder: ${folderId}. Attempting to unlock folder.`);
-                const isFolderAlreadyUnlocked = gameState.unlockedFolders.some(uf => uf.folderId.equals(folder._id));
-
-                if (!isFolderAlreadyUnlocked) {
-                    // console.log(`[SubmitAnswer - Correct] Folder ${folderId} was not previously fully unlocked. Adding to gameState.`);
+                // ✅ Last riddle solved — unlock the folder
+                if (folderIndex !== -1) {
+                    gameState.unlockedFolders[folderIndex].currentRiddleAttempt = null;
+                    gameState.unlockedFolders[folderIndex].unlockedAt = new Date();
+                } else {
                     gameState.unlockedFolders.push({
                         folderId: folder._id,
                         unlockedAt: new Date(),
-                        currentRiddleAttempt: null // Clear attempt once fully unlocked
+                        currentRiddleAttempt: null,
                     });
-                    gameState.lastFolderUnlockedAt = new Date(); // Update user's overall game state (if needed for leaderboard)
-                    // console.log(`[SubmitAnswer - Correct] Saving game state with unlocked folder...`);
-                    await gameState.save();
-                    // console.log(`[SubmitAnswer - Correct] Game state saved.`);
-
-                    // console.log(`[SubmitAnswer - Correct] Updating user last activity...`);
-                    // Ensure User model is correctly imported at the top of the file
-                    try {
-                        await User.findByIdAndUpdate(userId, { lastActivity: new Date() });
-                        // console.log(`[SubmitAnswer - Correct] User last activity updated.`);
-                    } catch (userUpdateError) {
-                        console.error(`[SubmitAnswer - Correct] Error updating user last activity: ${userUpdateError.message}`, userUpdateError);
-                        // Decide if this error should block the response. Probably not, it's a secondary update.
-                        // You might still want to proceed with the success response for the riddle.
-                    }
-
-                    // console.log(`[SubmitAnswer - Correct] Attempting to emit leaderboard update...`);
-                    // Ensure req.io is correctly attached by your server setup (e.g., in app.js or server.js)
-                    if (req.io) {
-                        try {
-                            req.io.emit('leaderboardUpdate', {
-                                userId: userId,
-                                unlockedFoldersCount: gameState.unlockedFolders.length,
-                            });
-                            // console.log(`[SubmitAnswer - Correct] Leaderboard update emitted successfully.`);
-                        } catch (socketEmitError) {
-                            console.error(`[SubmitAnswer - Correct] Error emitting leaderboard update via Socket.IO: ${socketEmitError.message}`, socketEmitError);
-                            // This error should definitely not block the main response.
-                        }
-                    } else {
-                        console.warn(`[SubmitAnswer - Correct] Socket.IO instance (req.io) not available. Cannot emit leaderboard update.`);
-                    }
-
-                    // console.log(`[SubmitAnswer - Correct] Sending final success response for unlocked folder.`);
-                    return res.status(200).json({ message: 'Correct answer! Folder unlocked!', unlocked: true });
-                } else {
-                    console.warn(`[SubmitAnswer - Correct] Folder ${folderId} was already fully unlocked. Sending success response.`);
-                    return res.status(200).json({ message: 'Correct answer! This folder was already unlocked.', unlocked: true });
                 }
+
+                gameState.lastFolderUnlockedAt = new Date();
+                await gameState.save();
+
+                try {
+                    await User.findByIdAndUpdate(userId, { lastActivity: new Date() });
+                } catch (err) {
+                    console.error(`[SubmitAnswer] Error updating user: ${err.message}`);
+                }
+
+                if (req.io) {
+                    try {
+                        req.io.emit('leaderboardUpdate', {
+                            userId,
+                            unlockedFoldersCount: gameState.unlockedFolders.filter(f => f.currentRiddleAttempt === null).length,
+                        });
+                    } catch (err) {
+                        console.error(`[SubmitAnswer] Socket emit error: ${err.message}`);
+                    }
+                }
+
+                return res.status(200).json({
+                    message: 'Correct answer! Folder unlocked!',
+                    unlocked: true,
+                });
             }
         } else {
-            // console.log(`[SubmitAnswer - Incorrect] Incorrect answer for folder: ${folderId}`);
             return res.status(400).json({ message: 'Incorrect answer. Try again!' });
         }
     } catch (error) {
-        console.error(`[SubmitAnswer ERROR] Uncaught error in submitAnswer: ${error.message}`, error); // More detailed error logging
-        // IMPORTANT: If you want to return a 500 status on *any* error, ensure you don't return res.status before this.
-        return res.status(500).json({ message: 'Internal Server Error during answer submission.' }); // Explicitly send 500
-        // next(error); // Alternatively, let your global error handler catch it.
-    } finally {
-        // console.log(`[SubmitAnswer END]`);
+        console.error(`[SubmitAnswer ERROR] ${error.message}`, error);
+        return res.status(500).json({ message: 'Internal Server Error during answer submission.' });
     }
 };
 
