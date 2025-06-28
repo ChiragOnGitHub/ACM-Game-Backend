@@ -23,13 +23,7 @@ const RiddleSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Riddle',
         default: null,
-    },
-    // If this riddle unlocks a specific folder upon correct answer
-    unlocksFolder: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Folder',
-        default: null,
-    },
+    }
 });
 
 module.exports = mongoose.model('Riddle', RiddleSchema);

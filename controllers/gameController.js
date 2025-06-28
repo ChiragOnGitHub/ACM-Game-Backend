@@ -162,11 +162,7 @@ exports.submitAnswer = async (req, res) => {
                 gameState.lastFolderUnlockedAt = new Date();
                 await gameState.save();
 
-                try {
-                    await User.findByIdAndUpdate(userId, { lastActivity: new Date() });
-                } catch (err) {
-                    console.error(`[SubmitAnswer] Error updating user: ${err.message}`);
-                }
+                
 
                 if (req.io) {
                     try {

@@ -28,26 +28,6 @@ const UserSchema = new mongoose.Schema({
     isAdmin: {
         type: Boolean,
         default: false,
-    },
-    // For tracking game progress
-    unlockedFolders: [
-        {
-            folderId: {
-                type: mongoose.Schema.Types.ObjectId,
-                ref: 'Folder',
-            },
-            unlockedAt: {
-                type: Date,
-                default: Date.now,
-            },
-        },
-    ],
-    gameStartTime: {
-        type: Date,
-    },
-    lastActivity: { // For time-based tie-breaking
-        type: Date,
-        default: Date.now,
     }
 });
 

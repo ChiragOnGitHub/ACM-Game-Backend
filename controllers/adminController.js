@@ -95,7 +95,7 @@ exports.getLeaderboard = async (req, res, next) => {
         // We're also using the 'lastActivity' from the User model for additional tie-breaking,
         // although 'lastFolderUnlockedAt' from GameState is generally preferred for game progress.
         const gameStates = await GameState.find({})
-            .populate('user', 'username rollNumber lastActivity'); // Populate specific user fields
+            .populate('user', 'username rollNumber'); // Populate specific user fields
 
         // Calculate scores and prepare leaderboard entries
         const leaderboard = gameStates
@@ -119,9 +119,6 @@ exports.getLeaderboard = async (req, res, next) => {
                     score: score, // This is the primary sorting key
                     // Use lastFolderUnlockedAt from GameState for tie-breaking for game completion
                     lastCompletionTime: gameState.lastFolderUnlockedAt,
-                    // Fallback to user's lastActivity if lastFolderUnlockedAt isn't set,
-                    // though lastFolderUnlockedAt is more accurate for game progress.
-                    userLastActivity: gameState.user.lastActivity
                 };
             })
             .filter(entry => entry !== null) // Remove entries where user was not found
@@ -138,14 +135,6 @@ exports.getLeaderboard = async (req, res, next) => {
                 if (b.lastCompletionTime === null && a.lastCompletionTime !== null) return -1; // Put nulls at the end of ties
                 if (a.lastCompletionTime !== null && b.lastCompletionTime !== null) {
                     return a.lastCompletionTime.getTime() - b.lastCompletionTime.getTime();
-                }
-
-                // Tertiary sort (fallback tie-breaker): Use user's lastActivity if both lastCompletionTime are null
-                // Or if for some reason lastCompletionTime is not granular enough.
-                if (a.userLastActivity === null && b.userLastActivity !== null) return 1;
-                if (b.userLastActivity === null && a.userLastActivity !== null) return -1;
-                if (a.userLastActivity !== null && b.userLastActivity !== null) {
-                    return a.userLastActivity.getTime() - b.userLastActivity.getTime();
                 }
 
                 return 0; // No change in order if all tie-breakers are equal
