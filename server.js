@@ -29,6 +29,7 @@ const io = new Server(server, {
 connectDB();
 
 // Middleware
+app.use("/public", express.static(path.join(__dirname, "public")));
 app.use(cors({
   origin: process.env.CLIENT_URL,
   credentials: true
