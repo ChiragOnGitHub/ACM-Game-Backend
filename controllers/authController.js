@@ -24,10 +24,10 @@ exports.registerUser = async (req, res, next) => {
         }
 
         // Check for existing roll number
-        const existingRollNumberUser = await User.findOne({ rollNumber });
-        if (existingRollNumberUser) {
-            return res.status(409).json({ message: 'User with this roll number already exists.', code: 'ROLL_NUMBER_EXISTS' });
-        }
+        // const existingRollNumberUser = await User.findOne({ rollNumber });
+        // if (existingRollNumberUser) {
+        //     return res.status(409).json({ message: 'User with this roll number already exists.', code: 'ROLL_NUMBER_EXISTS' });
+        // }
         
         // Ensure that a user with the same email or roll number doesn't exist but is NOT verified
         // (This is an edge case if a user registered but never verified)
