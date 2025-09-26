@@ -49,6 +49,16 @@ setupLeaderboardSocket(io);
 // Error Handling Middleware
 app.use(errorHandler);
 
+if (process.env.NODE_ENV === "production") {
+    const frontendPath = path.join(__dirname, "../client/build");
+    app.use(express.static(frontendPath));
+
+    app.get(/.*/, (req, res) => {
+        res.sendFile(path.resolve(frontendPath, "index.html"));
+    });
+
+}
+
 const PORT = process.env.PORT || 5000;
 
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
