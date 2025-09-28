@@ -50,7 +50,9 @@ setupLeaderboardSocket(io);
 app.use(errorHandler);
 
 if (process.env.NODE_ENV === "production") {
-    const frontendPath = path.join(__dirname, "../client/build");
+    // const frontendPath = path.join(__dirname, "../client/build");
+    const frontendFolder = process.env.FRONTEND_FOLDER_NAME || "client"; // default fallback
+    const frontendPath = path.join(__dirname, `../${frontendFolder}/build`);
     app.use(express.static(frontendPath));
 
     app.get(/.*/, (req, res) => {
