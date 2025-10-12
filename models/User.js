@@ -15,7 +15,6 @@ const UserSchema = new mongoose.Schema({
     rollNumber: {
         type: String,
         required: true,
-        unique: true,
     },
     password: {
         type: String,

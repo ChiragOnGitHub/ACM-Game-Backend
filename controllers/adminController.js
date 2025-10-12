@@ -106,7 +106,9 @@ exports.getLeaderboard = async (req, res, next) => {
                     return null; // Skip this entry if user data is missing
                 }
 
-                const unlockedFoldersCount = gameState.unlockedFolders.length;
+                const unlockedFoldersCount = gameState.unlockedFolders.filter(
+                    folder => folder.currentRiddleAttempt === null
+                ).length;
 
                 // The primary score is simply the number of unlocked folders.
                 const score = unlockedFoldersCount;
